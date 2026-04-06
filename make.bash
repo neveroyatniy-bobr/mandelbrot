@@ -1,0 +1,1 @@
+g++ main.cpp -O2 -DNDEBUG -march=native -lcsfml-graphics -lcsfml-window -lcsfml-system
