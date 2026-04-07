@@ -18,18 +18,6 @@ struct ScreenState {
     float zoom;
 };
 
-int float8_add(float a[8], float b[8]);
-int float8_sub(float a[8], float b[8]);
-int float8_div(float a[8], float b[8]);
-int float8_mul(float a[8], float b[8]);
-int float8_fil(float a[8], float b);
-int float8_rng(float a[8]);
-int float8_cpy(float a[8], float b[8]);
-int float8_cmp(float a[8], float b[8], int cmp[8]);
-
-int is_cmp_zero(int cmp[8]);
-int int8_add(int a[8], int b[8]);
-
 int HadleEvents(ScreenState* screen_state, sfRenderWindow* window, float dt);
 
 int UpdatePixels(ScreenState screen_state, sfColor* pixels);
@@ -85,196 +73,79 @@ int HadleEvents(ScreenState* screen_state, sfRenderWindow* window, float dt) {
             if (event.key.code == sfKeyQ      ) screen_state->zoom /= ZOOM_SENS;
         }
     }
+
+    return 0;
 }
 
 int UpdatePixels(ScreenState screen_state, sfColor* pixels) {
     for (int p_y = 0; p_y < HEIGHT; p_y++) {
         for (int p_x = 0; p_x < WIDTH / 8; p_x++) {
-            float rng8[8] = {};
-            float8_rng(rng8);
+            __m256 rng8 = _mm256_set_ps(7.0f, 6.0f, 5.0f, 4.0f, 3.0f, 2.0f, 1.0f, 0.0f);
+            __m256 height8 = _mm256_set1_ps((float)HEIGHT);
+            __m256 zoom8 = _mm256_set1_ps(screen_state.zoom);
 
-            float height8[8] = {};
-            float8_fil(height8, (float)HEIGHT);
+            __m256 p_x8 = _mm256_add_ps(_mm256_set1_ps((float)p_x*8), rng8);
 
-            float zoom8[8] = {};
-            float8_fil(zoom8, screen_state.zoom);
+            p_x8 = _mm256_div_ps(p_x8, height8);
 
-            float cx8[8] = {};
-            float8_fil(cx8, screen_state.x_pos);
+            p_x8 = _mm256_add_ps(p_x8, _mm256_set1_ps(-((float)WIDTH / (float)HEIGHT) / 2.0f));
 
-            float p_x8[8] = {};
-            float8_fil(p_x8, (float)p_x*8);
-            float8_add(p_x8, rng8);
+            p_x8 = _mm256_div_ps(p_x8, zoom8);
 
-            float8_div(p_x8, height8);
+            __m256 cx8 = _mm256_add_ps(_mm256_set1_ps(screen_state.x_pos), p_x8);
 
-            float dp_x8[8] = {};
-            float8_fil(dp_x8, -((float)WIDTH / (float)HEIGHT) / 2.0f);
-            float8_add(p_x8, dp_x8);
+            __m256 p_y8 = _mm256_set1_ps((float)p_y);
 
-            float8_div(p_x8, zoom8);
+            p_y8 = _mm256_div_ps(p_y8, height8);
 
-            float8_add(cx8, p_x8);
+            p_y8 = _mm256_add_ps(p_y8, _mm256_set1_ps(-0.5f));
 
-            float cy8[8] = {};
-            float8_fil(cy8, -screen_state.y_pos);
+            p_y8 = _mm256_div_ps(p_y8, zoom8);
 
-            float p_y8[8] = {};
-            float8_fil(p_y8, (float)p_y);
+            p_x8 = _mm256_mul_ps(p_x8, _mm256_set1_ps(-1.0f));
 
-            float8_div(p_y8, height8);
+            __m256 cy8 = _mm256_add_ps(_mm256_set1_ps(-screen_state.y_pos), p_y8);
 
-            float dp_y8[8] = {};
-            float8_fil(dp_y8, -0.5f);
-            float8_add(p_y8, dp_y8);
+            __m256i n8 = _mm256_setzero_si256();
 
-            float8_div(p_y8, zoom8);
-
-            float minus8[8] = {};
-            float8_fil(minus8, -1.0f);
-            float8_mul(p_x8, minus8);
-
-            float8_add(cy8, p_y8);
-
-            int n8[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-
-            float zx8[8] = {};
-            float zy8[8] = {};
-            float8_fil(zx8, 0.0f);
-            float8_fil(zy8, 0.0f);
+            __m256 zx8 = _mm256_setzero_ps();
+            __m256 zy8 = _mm256_setzero_ps();
             for (int i = 0; i < MAX_ITERATIONS; i++) {
                 //(zx + izy)^2 = zx^2 - zy^2 + 2*zx*zy*
 
-                float zx8_2[8] = {};
-                float8_cpy(zx8_2, zx8);
-                float8_mul(zx8_2, zx8);
-                float zy8_2[8] = {};
-                float8_cpy(zy8_2, zy8);
-                float8_mul(zy8_2, zy8);
+                __m256 zx8_2 = _mm256_mul_ps(zx8, zx8);
+                __m256 zy8_2 = _mm256_mul_ps(zy8, zy8);
 
-                float new_zx8[8] = {}; //zx2 - zy2 + cx
-                float8_cpy(new_zx8, zx8_2);
-                float8_sub(new_zx8, zy8_2);
-                float8_add(new_zx8, cx8);
+                __m256 new_zx8 = _mm256_add_ps(_mm256_sub_ps(zx8_2, zy8_2), cx8);
 
-                float new_zy8[8] = {}; //2*zx*zy + cy;
-                float8_fil(new_zy8, 2.0f);
-                float8_mul(new_zy8, zx8);
-                float8_mul(new_zy8, zy8);
-                float8_add(new_zy8, cy8);
+                __m256 zxzy8 = _mm256_mul_ps(zx8, zy8);
+                __m256 new_zy8 = _mm256_add_ps(_mm256_add_ps(zxzy8, zxzy8), cy8);
 
-                float8_cpy(zx8, new_zx8);
-                float8_cpy(zy8, new_zy8);
+                zx8 = new_zx8;
+                zy8 = new_zy8;
 
-                float r8_2[8] = {};
-                float8_cpy(r8_2, zx8_2);
-                float8_add(r8_2, zy8_2);
+                __m256 r8_2 = _mm256_add_ps(zx8_2, zy8_2);
+                __m256 n4_8 = _mm256_set1_ps(4.0f);
+                __m256i cmp8 = _mm256_castps_si256(_mm256_cmp_ps(n4_8, r8_2, _CMP_GT_OQ)); 
 
-                float n4_8[8] = {};
-                float8_fil(n4_8, 4.0f);
+                n8 = _mm256_sub_epi32(n8, cmp8);
 
-                int cmp8[8] = {};
-                float8_cmp(n4_8, r8_2, cmp8);
-
-                int8_add(n8, cmp8);
-
-                if (is_cmp_zero(cmp8)) {
+                if (_mm256_testz_si256(cmp8, cmp8)) {
                     break;
                 }
             }
             
+            int n_arr[8];
+            _mm256_storeu_si256((__m256i*)n_arr, n8);
             sfColor* start_pixel = pixels + p_y * WIDTH + p_x * 8;
             for (int p_i = 0; p_i < 8; p_i++) {
                 sfColor* pixel = start_pixel + p_i;
-                pixel->r = n8[p_i] *  7 % 255;
-                pixel->g = n8[p_i] * 11 % 255;
-                pixel->b = n8[p_i] * 17 % 255;
+                pixel->r = n_arr[p_i] *  7 % 255;
+                pixel->g = n_arr[p_i] * 11 % 255;
+                pixel->b = n_arr[p_i] * 17 % 255;
                 pixel->a = 255;
             }
         }
-    }
-
-    return 0;
-}
-
-int float8_add(float a[8], float b[8]) {
-    for (int i = 0; i < 8; i++) {
-        a[i] = a[i] + b[i];
-    }
-
-    return 0;
-}
-
-int float8_sub(float a[8], float b[8]) {
-    for (int i = 0; i < 8; i++) {
-        a[i] = a[i] - b[i];
-    }
-
-    return 0;
-}
-
-int float8_mul(float a[8], float b[8]) {
-    for (int i = 0; i < 8; i++) {
-        a[i] = a[i] * b[i];
-    }
-
-    return 0;
-}
-
-int float8_div(float a[8], float b[8]) {
-    for (int i = 0; i < 8; i++) {
-        a[i] = a[i] / b[i];
-    }
-
-    return 0;
-}
-
-int float8_rng(float a[8]) {
-    for (int i = 0; i < 8; i++) {
-        a[i] = (float)i;
-    }
-
-    return 0;
-}
-
-int float8_fil(float a[8], float b) {
-    for (int i = 0; i < 8; i++) {
-        a[i] = b;
-    }
-
-    return 0;
-}
-
-int float8_cpy(float a[8], float b[8]) {
-    for (int i = 0; i < 8; i++) {
-        a[i] = b[i];
-    }
-
-    return 0;
-}
-
-int float8_cmp(float a[8], float b[8], int cmp[8]) {
-    for (int i = 0; i < 8; i++) {
-        cmp[i] = (a[i] > b[i] ? 1 : 0);
-    }
-
-    return 0;
-}
-
-int is_cmp_zero(int cmp[8]) {
-    int is_cmp_zero = true;
-    for (int i = 0; i < 8; i++) {
-        if (cmp[i] != 0) {
-            is_cmp_zero = false;
-        }
-    }
-
-    return is_cmp_zero;
-}
-
-int int8_add(int a[8], int b[8]) {
-    for (int i = 0; i < 8; i++) {
-        a[i] = a[i] + b[i];
     }
 
     return 0;
