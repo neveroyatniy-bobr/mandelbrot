@@ -9,25 +9,22 @@ static const int    BPP =  32;
 
 static const int MAX_ITERATIONS = 256;
 
-static const float MOVE_SENS = 0.05;
+static const float MOVE_SENS = 1;
 static const float ZOOM_SENS = 1.05;
 
-int GetN(float cx, float cy) {
-    float zx = 0, zy = 0;
-    for (int i = 0; i < MAX_ITERATIONS; i++) {
-        //(zx + izy)^2 = zx^2 - zy^2 + 2*zx*zy*
-        float new_zx = zx*zx - zy*zy + cx;
-        float new_zy = 2*zx*zy + cy;
-        zx = new_zx;
-        zy = new_zy;
+int float8_add(float a[8], float b[8]);
+int float8_sub(float a[8], float b[8]);
+int float8_div(float a[8], float b[8]);
+int float8_mul(float a[8], float b[8]);
+int float8_fil(float a[8], float b);
+int float8_rng(float a[8]);
+int float8_cpy(float a[8], float b[8]);
+int float8_cmp(float a[8], float b[8], int cmp[8]);
 
-        if (zx*zx + zy*zy >= 4.0f) {
-            return i;
-        }
-    }
+int is_cmp_zero(int cmp[8]);
+int int8_add(int a[8], int b[8]);
 
-    return 255;
-}
+int UpdatePixels(float x_pos, float y_pos, float zoom, sfColor* pixels);
 
 int main() {
     sfRenderWindow* window = sfRenderWindow_create((sfVideoMode){WIDTH, HEIGHT, BPP}, "Random pixels", sfClose, NULL);
@@ -45,6 +42,10 @@ int main() {
     float zoom = 1;
 
     while (sfRenderWindow_isOpen(window)) {
+        float dt = sfTime_asSeconds(sfClock_getElapsedTime(clock));
+        printf("%d\n", (int)(1 / dt));
+        sfClock_restart(clock);
+
         sfEvent event;
         while (sfRenderWindow_pollEvent(window, &event)) {
             if (event.type == sfEvtClosed) {
@@ -52,35 +53,215 @@ int main() {
             }
             if (event.type == sfEvtKeyPressed) {
                 if (event.key.code == sfKeyEscape ) sfRenderWindow_close(window);
-                if (event.key.code == sfKeyW      ) y_pos += MOVE_SENS / zoom;
-                if (event.key.code == sfKeyS      ) y_pos -= MOVE_SENS / zoom;
-                if (event.key.code == sfKeyA      ) x_pos -= MOVE_SENS / zoom;
-                if (event.key.code == sfKeyD      ) x_pos += MOVE_SENS / zoom;
+                if (event.key.code == sfKeyW      ) y_pos += MOVE_SENS * dt / zoom;
+                if (event.key.code == sfKeyS      ) y_pos -= MOVE_SENS * dt / zoom;
+                if (event.key.code == sfKeyA      ) x_pos -= MOVE_SENS * dt / zoom;
+                if (event.key.code == sfKeyD      ) x_pos += MOVE_SENS * dt / zoom;
                 if (event.key.code == sfKeyE      ) zoom *= ZOOM_SENS;
                 if (event.key.code == sfKeyQ      ) zoom /= ZOOM_SENS;
             }
         }
 
-        for (int p_i = 0; p_i < WIDTH * HEIGHT; p_i++) {
-            sfColor* pixel = pixels + p_i;
-            float cx = x_pos + ((float)(p_i%WIDTH) / (float)HEIGHT - 1.33f/2) / zoom       ;
-            float cy = y_pos + ((float)(p_i/WIDTH) / (float)HEIGHT -  1.0f/2) / zoom * (-1);
-
-            int n = GetN(cx, cy);
-            pixel->r = n *  7 % 255;
-            pixel->g = n * 11 % 255;
-            pixel->b = n * 17 % 255;
-            pixel->a = 255;
-        }
+        UpdatePixels(x_pos, y_pos, zoom, pixels);
 
         sfTexture_updateFromPixels(texture, (sfUint8*)pixels, WIDTH, HEIGHT, 0, 0);
-        printf("%d\n", (int)(1 / sfTime_asSeconds(sfClock_getElapsedTime(clock))));
-        sfClock_restart(clock);
-
 
         sfRenderWindow_drawSprite(window, sprite, NULL);
         sfRenderWindow_display(window);
     }
     
+    return 0;
+}
+
+int UpdatePixels(float x_pos, float y_pos, float zoom, sfColor* pixels) {
+    for (int p_y = 0; p_y < HEIGHT; p_y++) {
+        for (int p_x = 0; p_x < WIDTH / 8; p_x++) {
+            float rng8[8] = {};
+            float8_rng(rng8);
+
+            float height8[8] = {};
+            float8_fil(height8, (float)HEIGHT);
+
+            float zoom8[8] = {};
+            float8_fil(zoom8, zoom);
+
+            float cx8[8] = {};
+            float8_fil(cx8, x_pos);
+
+            float p_x8[8] = {};
+            float8_fil(p_x8, (float)p_x*8);
+            float8_add(p_x8, rng8);
+
+            float8_div(p_x8, height8);
+
+            float dp_x8[8] = {};
+            float8_fil(dp_x8, -((float)WIDTH / (float)HEIGHT) / 2.0f);
+            float8_add(p_x8, dp_x8);
+
+            float8_div(p_x8, zoom8);
+
+            float8_add(cx8, p_x8);
+
+            float cy8[8] = {};
+            float8_fil(cy8, -y_pos);
+
+            float p_y8[8] = {};
+            float8_fil(p_y8, (float)p_y);
+
+            float8_div(p_y8, height8);
+
+            float dp_y8[8] = {};
+            float8_fil(dp_y8, -0.5f);
+            float8_add(p_y8, dp_y8);
+
+            float8_div(p_y8, zoom8);
+
+            float minus8[8] = {};
+            float8_fil(minus8, -1.0f);
+            float8_mul(p_x8, minus8);
+
+            float8_add(cy8, p_y8);
+
+            int n8[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+
+            float zx8[8] = {};
+            float zy8[8] = {};
+            float8_fil(zx8, 0.0f);
+            float8_fil(zy8, 0.0f);
+            for (int i = 0; i < MAX_ITERATIONS; i++) {
+                //(zx + izy)^2 = zx^2 - zy^2 + 2*zx*zy*
+
+                float zx8_2[8] = {};
+                float8_cpy(zx8_2, zx8);
+                float8_mul(zx8_2, zx8);
+                float zy8_2[8] = {};
+                float8_cpy(zy8_2, zy8);
+                float8_mul(zy8_2, zy8);
+
+                float new_zx8[8] = {}; //zx2 - zy2 + cx
+                float8_cpy(new_zx8, zx8_2);
+                float8_sub(new_zx8, zy8_2);
+                float8_add(new_zx8, cx8);
+
+                float new_zy8[8] = {}; //2*zx*zy + cy;
+                float8_fil(new_zy8, 2.0f);
+                float8_mul(new_zy8, zx8);
+                float8_mul(new_zy8, zy8);
+                float8_add(new_zy8, cy8);
+
+                float8_cpy(zx8, new_zx8);
+                float8_cpy(zy8, new_zy8);
+
+                float r8_2[8] = {};
+                float8_cpy(r8_2, zx8_2);
+                float8_add(r8_2, zy8_2);
+
+                float n4_8[8] = {};
+                float8_fil(n4_8, 4.0f);
+
+                int cmp8[8] = {};
+                float8_cmp(n4_8, r8_2, cmp8);
+
+                int8_add(n8, cmp8);
+
+                if (is_cmp_zero(cmp8)) {
+                    break;
+                }
+            }
+            
+            sfColor* start_pixel = pixels + p_y * WIDTH + p_x * 8;
+            for (int p_i = 0; p_i < 8; p_i++) {
+                sfColor* pixel = start_pixel + p_i;
+                pixel->r = n8[p_i] *  7 % 255;
+                pixel->g = n8[p_i] * 11 % 255;
+                pixel->b = n8[p_i] * 17 % 255;
+                pixel->a = 255;
+            }
+        }
+    }
+
+    return 0;
+}
+
+int float8_add(float a[8], float b[8]) {
+    for (int i = 0; i < 8; i++) {
+        a[i] = a[i] + b[i];
+    }
+
+    return 0;
+}
+
+int float8_sub(float a[8], float b[8]) {
+    for (int i = 0; i < 8; i++) {
+        a[i] = a[i] - b[i];
+    }
+
+    return 0;
+}
+
+int float8_mul(float a[8], float b[8]) {
+    for (int i = 0; i < 8; i++) {
+        a[i] = a[i] * b[i];
+    }
+
+    return 0;
+}
+
+int float8_div(float a[8], float b[8]) {
+    for (int i = 0; i < 8; i++) {
+        a[i] = a[i] / b[i];
+    }
+
+    return 0;
+}
+
+int float8_rng(float a[8]) {
+    for (int i = 0; i < 8; i++) {
+        a[i] = (float)i;
+    }
+
+    return 0;
+}
+
+int float8_fil(float a[8], float b) {
+    for (int i = 0; i < 8; i++) {
+        a[i] = b;
+    }
+
+    return 0;
+}
+
+int float8_cpy(float a[8], float b[8]) {
+    for (int i = 0; i < 8; i++) {
+        a[i] = b[i];
+    }
+
+    return 0;
+}
+
+int float8_cmp(float a[8], float b[8], int cmp[8]) {
+    for (int i = 0; i < 8; i++) {
+        cmp[i] = (a[i] > b[i] ? 1 : 0);
+    }
+
+    return 0;
+}
+
+int is_cmp_zero(int cmp[8]) {
+    int is_cmp_zero = true;
+    for (int i = 0; i < 8; i++) {
+        if (cmp[i] != 0) {
+            is_cmp_zero = false;
+        }
+    }
+
+    return is_cmp_zero;
+}
+
+int int8_add(int a[8], int b[8]) {
+    for (int i = 0; i < 8; i++) {
+        a[i] = a[i] + b[i];
+    }
+
     return 0;
 }
