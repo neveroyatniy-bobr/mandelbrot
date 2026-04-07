@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <stdio.h>
+#include <immintrin.h>
 
 static const int  WIDTH = 800;
 static const int HEIGHT = 600;
@@ -11,6 +12,11 @@ static const int MAX_ITERATIONS = 256;
 
 static const float MOVE_SENS = 1;
 static const float ZOOM_SENS = 1.05;
+
+struct ScreenState {
+    float x_pos, y_pos;
+    float zoom;
+};
 
 int float8_add(float a[8], float b[8]);
 int float8_sub(float a[8], float b[8]);
@@ -24,7 +30,9 @@ int float8_cmp(float a[8], float b[8], int cmp[8]);
 int is_cmp_zero(int cmp[8]);
 int int8_add(int a[8], int b[8]);
 
-int UpdatePixels(float x_pos, float y_pos, float zoom, sfColor* pixels);
+int HadleEvents(ScreenState* screen_state, sfRenderWindow* window, float dt);
+
+int UpdatePixels(ScreenState screen_state, sfColor* pixels);
 
 int main() {
     sfRenderWindow* window = sfRenderWindow_create((sfVideoMode){WIDTH, HEIGHT, BPP}, "Random pixels", sfClose, NULL);
@@ -36,33 +44,21 @@ int main() {
     sfColor* pixels = (sfColor*)calloc(WIDTH * HEIGHT, 4);
 
     sfClock* clock = sfClock_create();
-    srand(time(NULL));
 
-    float x_pos = 0, y_pos = 0;
-    float zoom = 1;
+    ScreenState screen_state = {
+        .x_pos = 0,
+        .y_pos = 0,
+        .zoom  = 1
+    };
 
     while (sfRenderWindow_isOpen(window)) {
         float dt = sfTime_asSeconds(sfClock_getElapsedTime(clock));
         printf("%d\n", (int)(1 / dt));
         sfClock_restart(clock);
 
-        sfEvent event;
-        while (sfRenderWindow_pollEvent(window, &event)) {
-            if (event.type == sfEvtClosed) {
-                sfRenderWindow_close(window);
-            }
-            if (event.type == sfEvtKeyPressed) {
-                if (event.key.code == sfKeyEscape ) sfRenderWindow_close(window);
-                if (event.key.code == sfKeyW      ) y_pos += MOVE_SENS * dt / zoom;
-                if (event.key.code == sfKeyS      ) y_pos -= MOVE_SENS * dt / zoom;
-                if (event.key.code == sfKeyA      ) x_pos -= MOVE_SENS * dt / zoom;
-                if (event.key.code == sfKeyD      ) x_pos += MOVE_SENS * dt / zoom;
-                if (event.key.code == sfKeyE      ) zoom *= ZOOM_SENS;
-                if (event.key.code == sfKeyQ      ) zoom /= ZOOM_SENS;
-            }
-        }
+        HadleEvents(&screen_state, window, dt);
 
-        UpdatePixels(x_pos, y_pos, zoom, pixels);
+        UpdatePixels(screen_state, pixels);
 
         sfTexture_updateFromPixels(texture, (sfUint8*)pixels, WIDTH, HEIGHT, 0, 0);
 
@@ -73,7 +69,25 @@ int main() {
     return 0;
 }
 
-int UpdatePixels(float x_pos, float y_pos, float zoom, sfColor* pixels) {
+int HadleEvents(ScreenState* screen_state, sfRenderWindow* window, float dt) {
+    sfEvent event;
+    while (sfRenderWindow_pollEvent(window, &event)) {
+        if (event.type == sfEvtClosed) {
+            sfRenderWindow_close(window);
+        }
+        if (event.type == sfEvtKeyPressed) {
+            if (event.key.code == sfKeyEscape ) sfRenderWindow_close(window);
+            if (event.key.code == sfKeyD      ) screen_state->x_pos += MOVE_SENS * dt / screen_state->zoom;
+            if (event.key.code == sfKeyW      ) screen_state->y_pos += MOVE_SENS * dt / screen_state->zoom;
+            if (event.key.code == sfKeyS      ) screen_state->y_pos -= MOVE_SENS * dt / screen_state->zoom;
+            if (event.key.code == sfKeyA      ) screen_state->x_pos -= MOVE_SENS * dt / screen_state->zoom;
+            if (event.key.code == sfKeyE      ) screen_state->zoom *= ZOOM_SENS;
+            if (event.key.code == sfKeyQ      ) screen_state->zoom /= ZOOM_SENS;
+        }
+    }
+}
+
+int UpdatePixels(ScreenState screen_state, sfColor* pixels) {
     for (int p_y = 0; p_y < HEIGHT; p_y++) {
         for (int p_x = 0; p_x < WIDTH / 8; p_x++) {
             float rng8[8] = {};
@@ -83,10 +97,10 @@ int UpdatePixels(float x_pos, float y_pos, float zoom, sfColor* pixels) {
             float8_fil(height8, (float)HEIGHT);
 
             float zoom8[8] = {};
-            float8_fil(zoom8, zoom);
+            float8_fil(zoom8, screen_state.zoom);
 
             float cx8[8] = {};
-            float8_fil(cx8, x_pos);
+            float8_fil(cx8, screen_state.x_pos);
 
             float p_x8[8] = {};
             float8_fil(p_x8, (float)p_x*8);
@@ -103,7 +117,7 @@ int UpdatePixels(float x_pos, float y_pos, float zoom, sfColor* pixels) {
             float8_add(cx8, p_x8);
 
             float cy8[8] = {};
-            float8_fil(cy8, -y_pos);
+            float8_fil(cy8, -screen_state.y_pos);
 
             float p_y8[8] = {};
             float8_fil(p_y8, (float)p_y);
