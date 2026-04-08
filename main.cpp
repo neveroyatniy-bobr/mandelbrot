@@ -4,8 +4,9 @@
 #include <stdio.h>
 #include <immintrin.h>
 
+
 static const int  WIDTH = 800;
-static const int HEIGHT = 600;
+static const int HEIGHT = 450;
 static const int    BPP =  32;
 
 static const int MAX_ITERATIONS = 256;
@@ -135,16 +136,21 @@ int UpdatePixels(ScreenState screen_state, sfColor* pixels) {
                 }
             }
             
-            int n_arr[8];
-            _mm256_storeu_si256((__m256i*)n_arr, n8);
+            __m256i r_div_255 = _mm256_set1_epi32(255);
+
+            __m256i r8 = _mm256_and_si256(_mm256_mullo_epi32(n8, _mm256_set1_epi32(7)),  r_div_255);
+            __m256i g8 = _mm256_and_si256(_mm256_mullo_epi32(n8, _mm256_set1_epi32(11)), r_div_255);
+            __m256i b8 = _mm256_and_si256(_mm256_mullo_epi32(n8, _mm256_set1_epi32(17)), r_div_255);
+            __m256i a8 = _mm256_set1_epi32(255);
+
+            g8 = _mm256_slli_epi32(g8, 8);
+            b8 = _mm256_slli_epi32(b8, 16);
+            a8 = _mm256_slli_epi32(a8, 24);
+
+            __m256i rgba8 = _mm256_or_si256(_mm256_or_si256(r8, g8), _mm256_or_si256(b8, a8));
+
             sfColor* start_pixel = pixels + p_y * WIDTH + p_x * 8;
-            for (int p_i = 0; p_i < 8; p_i++) {
-                sfColor* pixel = start_pixel + p_i;
-                pixel->r = n_arr[p_i] *  7 % 255;
-                pixel->g = n_arr[p_i] * 11 % 255;
-                pixel->b = n_arr[p_i] * 17 % 255;
-                pixel->a = 255;
-            }
+            _mm256_storeu_si256((__m256i*)start_pixel, rgba8);
         }
     }
 
