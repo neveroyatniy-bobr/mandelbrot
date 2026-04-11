@@ -55,6 +55,7 @@ int main() {
             StartTimer(&timer);
 
             UpdatePixels(screen_state, pixels);
+            __asm__ volatile("" : : "g" (pixels) : "memory");
 
             EndTimer(&timer);
             calc_times[mes_i] = GetTime(&timer);
