@@ -1,1 +1,1 @@
-g++ main.cpp -g -O2 -DNDEBUG -march=native -lcsfml-graphics -lcsfml-window -lcsfml-system
+g++ main.cpp timer.cpp -g -O2 -DNDEBUG -march=native -lcsfml-graphics -lcsfml-window -lcsfml-system

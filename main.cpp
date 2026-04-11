@@ -4,9 +4,12 @@
 #include <stdio.h>
 #include <immintrin.h>
 
+#include "timer.hpp"
+
+#define TIME
 
 static const int  WIDTH = 800;
-static const int HEIGHT = 450;
+static const int HEIGHT = 600;
 static const int    BPP =  32;
 
 static const int MAX_ITERATIONS = 256;
@@ -40,21 +43,51 @@ int main() {
         .zoom  = 1
     };
 
-    while (sfRenderWindow_isOpen(window)) {
-        float dt = sfTime_asSeconds(sfClock_getElapsedTime(clock));
-        printf("%d\n", (int)(1 / dt));
-        sfClock_restart(clock);
+    #ifdef TIME
+        const int MEASUREMENT_CNT = 100;
+        const char* calc_times_file_name = "calc_times.csv";
 
-        HadleEvents(&screen_state, window, dt);
+        Timer timer = {};
+        size_t calc_times[MEASUREMENT_CNT] = {};
+        int mes_i = 0;
 
-        UpdatePixels(screen_state, pixels);
+        for(mes_i = 0; mes_i < MEASUREMENT_CNT; mes_i++) {
+            StartTimer(&timer);
 
-        sfTexture_updateFromPixels(texture, (sfUint8*)pixels, WIDTH, HEIGHT, 0, 0);
+            UpdatePixels(screen_state, pixels);
 
-        sfRenderWindow_drawSprite(window, sprite, NULL);
-        sfRenderWindow_display(window);
-    }
-    
+            EndTimer(&timer);
+            calc_times[mes_i] = GetTime(&timer);
+        }
+
+        FILE* calc_times_file = fopen(calc_times_file_name, "w");
+        if (calc_times_file == NULL) {
+            fprintf(stderr, "Не удалось сиздать файл с измерениями");
+            return 1;
+        }
+
+        for(mes_i = 0; mes_i < MEASUREMENT_CNT; mes_i++) {
+            fprintf(calc_times_file, "%ld\n", calc_times[mes_i]);
+        }
+
+        fclose(calc_times_file);
+    #else
+        while (sfRenderWindow_isOpen(window)) {
+            float dt = sfTime_asSeconds(sfClock_getElapsedTime(clock));
+            // printf("%d\n", (int)(1 / dt));
+            sfClock_restart(clock);
+
+            HadleEvents(&screen_state, window, dt);
+
+            UpdatePixels(screen_state, pixels);
+            
+            sfTexture_updateFromPixels(texture, (sfUint8*)pixels, WIDTH, HEIGHT, 0, 0);
+
+            sfRenderWindow_drawSprite(window, sprite, NULL);
+            sfRenderWindow_display(window);
+        }
+    #endif
+
     return 0;
 }
 
