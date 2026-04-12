@@ -1,0 +1,6 @@
+система: Linux DESKTOP-84FLGRI 6.6.87.2-microsoft-standard-WSL2
+CPU: AMD Ryzen 9 8945HX
+ср частота: 2495 MHz
+компилятор: g++ 13.3.0, clang++ 18.1.3
+опции компилятора -g -O2 -DNDEBUG -march=native
+ср время измерений: ~30сек
